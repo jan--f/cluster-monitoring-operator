@@ -15,13 +15,18 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
+	"github.com/openshift/cluster-monitoring-operator/pkg/manifests"
 )
 
 func TestPrometheusMetrics(t *testing.T) {
@@ -90,5 +95,183 @@ func TestPrometheusAlertmanagerAntiAffinity(t *testing.T) {
 
 	if !almOk == true || !k8sOk == true {
 		t.Fatal("Can not find pods: prometheus-k8s or alertmanager-main")
+	}
+}
+
+func TestPrometheusRemoteWrite(t *testing.T) {
+	ctx := context.Background()
+
+	targetDeployment := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: instrumented-sample-app
+  namespace: openshift-monitoring
+  labels:
+    group: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      group: test
+  template:
+    metadata:
+      labels:
+        group: test
+    spec:
+      containers:
+      - name: example-app
+        args:
+        - --cert-path=/etc/certs
+        image: quay.io/coreos/instrumented-sample-app:0.2.0-bearer-mtls-1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: web
+          containerPort: 8080
+        - name: mtls
+          containerPort: 8081
+        volumeMounts:
+        - mountPath: /etc/certs
+          name: certs
+        - mountPath: /etc/certs/tls
+          name: rw-target-tls
+        - mountPath: /etc/certs/ca
+          name: serving-certs-ca-bundle
+      volumes:
+      - name: rw-target-tls
+        secret:
+          secretName: rw-target-tls
+      - name: serving-certs-ca-bundle
+        configMap:
+          name: serving-certs-ca-bundle
+      - name: certs
+        emptyDir: {}
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - 'cp /etc/certs/tls/tls.key /etc/certs/key.pem; cat /etc/certs/tls/tls.crt > /etc/certs/cert.pem; cat /etc/certs/ca/service-ca.crt >> /etc/certs/cert.pem'
+        name: crypt-init
+        image: busybox
+        volumeMounts:
+        - mountPath: /etc/certs
+          name: certs
+        - mountPath: /etc/certs/tls
+          name: rw-target-tls
+        - mountPath: /etc/certs/ca
+          name: serving-certs-ca-bundle
+`
+	rwTestDeployment, err := manifests.NewDeployment(bytes.NewReader([]byte(targetDeployment)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create service with annotation for service-ca operator
+	name := "test"
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"group": name,
+			},
+			Namespace: f.Ns,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/serving-cert-secret-name": "rw-target-tls",
+			},
+		},
+		Spec: v1.ServiceSpec{
+			Type: v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{
+				{
+					Name: "web",
+					Port: 8080,
+				},
+				{
+					Name: "mtls",
+					Port: 8081,
+				},
+			},
+			Selector: map[string]string{
+				"group": name,
+			},
+		},
+	}
+
+	if err := f.OperatorClient.CreateOrUpdateService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	// deploy remote write target
+	if err := f.OperatorClient.CreateOrUpdateDeployment(ctx, rwTestDeployment); err != nil {
+		t.Fatal(err)
+	}
+	deployedService, err := f.KubeClient.CoreV1().Services(f.Ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, scenario := range []struct {
+		name  string
+		proto string
+	}{
+		// check remote write logs
+		{
+			name:  "assert remote write to http works",
+			proto: "http",
+		},
+	} {
+		url := scenario.proto + "://" + deployedService.Spec.ClusterIP + ":" + fmt.Sprint(deployedService.Spec.Ports[1].Port)
+
+		cmoConfigMap := fmt.Sprintf(`prometheusK8s:
+  logLevel: debug
+  retention: 10h
+  tolerations:
+    - operator: "Exists"
+  remoteWrite:
+  - url: "%s"
+`, url)
+		t.Run(scenario.name, assertRemoteWriteInLogs(name, cmoConfigMap, ctx))
+	}
+}
+
+func assertRemoteWriteInLogs(name string, cmoConfigMap string, ctx context.Context) func(*testing.T) {
+	return func(t *testing.T) {
+		if err := f.OperatorClient.CreateOrUpdateConfigMap(ctx, configMapWithData(t, cmoConfigMap)); err != nil {
+			t.Fatal(err)
+		}
+
+		promLogs0, err := f.GetLogs(f.Ns, "prometheus-k8s-0", "prometheus")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		promLogs1, err := f.GetLogs(f.Ns, "prometheus-k8s-1", "prometheus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var promLogs strings.Builder
+		promLogErr := "prometheus logs are empty, expected to find log messages"
+		if i, _ := promLogs.WriteString(promLogs0); i == 0 {
+			t.Fatal(promLogErr)
+		}
+		if i, _ := promLogs.WriteString(promLogs1); i == 0 {
+			t.Fatal(promLogErr)
+		}
+
+		rwEndpointOpts := metav1.ListOptions{LabelSelector: labels.FormatLabels(map[string]string{"group": name})}
+
+		rwEndpointPodList, err := f.KubeClient.CoreV1().Pods(f.Ns).List(ctx, rwEndpointOpts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rwEndpointLogs, err := f.GetLogs(f.Ns, rwEndpointPodList.Items[0].ObjectMeta.Name, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if strings.Contains(promLogs.String(), `msg="Failed to send batch, retrying`) {
+			t.Fatal("unexpected prometheus log message, failed to send batch to remote write endpoint")
+		}
+		if strings.Contains(rwEndpointLogs, "remote error: tls: bad certificate") {
+			t.Fatal("remote write tls endpoint sees bad or no certificate")
+		}
 	}
 }
