@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/gabs"
+	"github.com/openshift/library-go/pkg/crypto"
 )
 
 func getActiveTarget(body []byte, jobName string) error {
@@ -72,4 +73,66 @@ func getThanosRules(body []byte, expGroupName, expRuleName string) error {
 		}
 	}
 	return fmt.Errorf("'%s' alert not found in '%s' group", expRuleName, expGroupName)
+}
+
+func createSelfSignedMTLSArtifacts(s *v1.Secret) error {
+	newCAConfig, err := crypto.MakeSelfSignedCAConfig(
+		fmt.Sprintf("%s@%d", "openshift-cluster-monitoring-test", time.Now().Unix()),
+		crypto.DefaultCertificateLifetimeInDays,
+	)
+	if err != nil {
+		return errors.Wrap(err, "error generating self signed CA")
+	}
+
+	newCA = &crypto.CA{
+		SerialGenerator: &crypto.RandomSerialGenerator{},
+		Config:          newCAConfig,
+	}
+
+	newCABytes, newCAKeyBytes, err := newCA.Config.GetPEMBytes()
+	if err != nil {
+		return errors.Wrap(err, "error getting PEM bytes from CA")
+	}
+
+	s.Data["ca.crt"] = newCABytes
+	s.Data["ca.key"] = newCAKeyBytes
+	// create serving certs maybe according to secret keys?
+	{
+		cfg, err := newCA.MakeServerCert(
+			sets.NewString(s.Data["serving-cert-url"]),
+			crypto.DefaultCertificateLifetimeInDays,
+		)
+		if err != nil {
+			return errors.Wrap(err, "error making server certificate")
+		}
+
+		crt, key, err := cfg.GetPEMBytes()
+		if err != nil {
+			return errors.Wrap(err, "error getting PEM bytes for server certificate")
+		}
+		s.Data["server.crt"] = crt
+		s.Data["server.key"] = key
+		s.Data["server-ca.pem"] = crt + newCABytes
+	}
+	// create clien keys the same way
+	{
+		cfg, err := newCA.MakeClientCertificateForDuration(
+			&user.DefaultInfo{
+				Name: s.Data["client-cert-name"],
+			},
+			time.Duration(crypto.DefaultCertificateLifetimeInDays)*24*time.Hour,
+		)
+		if err != nil {
+			return errors.Wrap(err, "error making client certificate")
+		}
+
+		crt, key, err := cfg.GetPEMBytes()
+		if err != nil {
+			return errors.Wrap(err, "error getting PEM bytes for client certificate")
+		}
+		s.Data["client.crt"] = crt
+		s.Data["client.key"] = key
+	}
+
+	// maybe add additional fields with combined ca and certs?
 }

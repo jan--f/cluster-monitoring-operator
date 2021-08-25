@@ -132,33 +132,15 @@ spec:
         volumeMounts:
         - mountPath: /etc/certs
           name: certs
-        - mountPath: /etc/certs/tls
-          name: rw-target-tls
-        - mountPath: /etc/certs/ca
-          name: serving-certs-ca-bundle
       volumes:
-      - name: rw-target-tls
-        secret:
-          secretName: rw-target-tls
-      - name: serving-certs-ca-bundle
-        configMap:
-          name: serving-certs-ca-bundle
       - name: certs
-        emptyDir: {}
-      initContainers:
-      - command:
-        - /bin/sh
-        - -c
-        - 'cp /etc/certs/tls/tls.key /etc/certs/key.pem; cat /etc/certs/tls/tls.crt > /etc/certs/cert.pem; cat /etc/certs/ca/service-ca.crt >> /etc/certs/cert.pem'
-        name: crypt-init
-        image: busybox
-        volumeMounts:
-        - mountPath: /etc/certs
-          name: certs
-        - mountPath: /etc/certs/tls
-          name: rw-target-tls
-        - mountPath: /etc/certs/ca
-          name: serving-certs-ca-bundle
+        secret:
+          secretName: selfsigned-mtls-bundle
+        items:
+        - key: server-ca.pem
+        path: cert.pem
+        - key: server.key
+        path: key.pem
 `
 	rwTestDeployment, err := manifests.NewDeployment(bytes.NewReader([]byte(targetDeployment)))
 	if err != nil {
@@ -174,9 +156,6 @@ spec:
 				"group": name,
 			},
 			Namespace: f.Ns,
-			Annotations: map[string]string{
-				"service.beta.openshift.io/serving-cert-secret-name": "rw-target-tls",
-			},
 		},
 		Spec: v1.ServiceSpec{
 			Type: v1.ServiceTypeLoadBalancer,
@@ -199,35 +178,71 @@ spec:
 	if err := f.OperatorClient.CreateOrUpdateService(ctx, svc); err != nil {
 		t.Fatal(err)
 	}
-	// deploy remote write target
-	if err := f.OperatorClient.CreateOrUpdateDeployment(ctx, rwTestDeployment); err != nil {
-		t.Fatal(err)
-	}
 	deployedService, err := f.KubeClient.CoreV1().Services(f.Ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	tlsSecret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "selfsigned-mtls-bundle",
+		},
+		Data: map[string][]byte{
+			"client-cert-name": []byte("test-client"),
+			"serving-cert-url": []byte(deployedService.Spec.ClusterIP),
+		},
+	}
+	sClient := f.OperatorClient.kclient.CoreV1().Secrets(f.Ns)
+	sec := sClient.Create(ctx, tlsSecret, metav1.CreateOptions{})
+	if err := createSelfSignedMTLSArtifacts(sec); err != nil {
+		t.Fatal(err)
+	}
 
+	// deploy remote write target
+	if err := f.OperatorClient.CreateOrUpdateDeployment(ctx, rwTestDeployment); err != nil {
+		t.Fatal(err)
+	}
 	for _, scenario := range []struct {
-		name  string
-		proto string
+		name   string
+		port   string
+		rwSpec string
 	}{
 		// check remote write logs
 		{
-			name:  "assert remote write to http works",
-			proto: "http",
+			name: "assert remote write to http works",
+			port: "8080",
+			rwSpec: `
+  - url: "http://%s"`,
+		},
+		{
+			name: "assert mtls remote write works",
+			port: "8081",
+			rwSpec: `
+  - url: "https://%s"
+    tlsConfig:
+      ca:
+        secret:
+          name: selfsigned-tls-bundle
+          key: ca.crt
+      cert:
+        secret:
+          name: selfsigned-tls-bundle
+          key: client.crt
+      keySecret:
+        secret:
+          name: selfsigned-tls-bundle
+          key: client.key
+`,
 		},
 	} {
-		url := scenario.proto + "://" + deployedService.Spec.ClusterIP + ":" + fmt.Sprint(deployedService.Spec.Ports[1].Port)
+		rw := fmt.Sprintf(scenario.rwSpec, deployedService.Spec.ClusterIP+":"+scenario.port)
 
 		cmoConfigMap := fmt.Sprintf(`prometheusK8s:
   logLevel: debug
   retention: 10h
   tolerations:
     - operator: "Exists"
-  remoteWrite:
-  - url: "%s"
-`, url)
+  remoteWrite: "%s"
+`, rw)
 		t.Run(scenario.name, assertRemoteWriteInLogs(name, cmoConfigMap, ctx))
 	}
 }
