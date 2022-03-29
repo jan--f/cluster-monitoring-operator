@@ -764,12 +764,12 @@ func (c *Client) WaitForPrometheus(ctx context.Context, p *monv1.Prometheus) err
 	return nil
 }
 
-func (c *Client) validatePrometheusPodState(ctx context.Context, p *monv1.Prometheus) *StateError {
+func (c *Client) validatePrometheusPodState(ctx context.Context, p *monv1.Prometheus) error {
 
 	status, _, err := prometheusoperator.Status(ctx, c.kclient.(*kubernetes.Clientset), p)
 	if err != nil {
 		klog.V(4).ErrorS(err, "validatePrometheusPodState: failed to get Prometheus status")
-		return NewDegradedError("failed to get prometheus status", err.Error())
+		return StatusError{status: "degraded", reason: "failed to get prometheus status"}
 	}
 
 	required := *p.Spec.Replicas
@@ -788,16 +788,12 @@ func (c *Client) validatePrometheusPodState(ctx context.Context, p *monv1.Promet
 	// FIXME(sthaha): this assumes that the p.Spec.Shard is nil which is the case in OCP
 	pods, err := c.kclient.CoreV1().Pods(p.Namespace).List(ctx, prometheusoperator.ListOptions(p.Name))
 	if err != nil {
-		se := newUnkownStateError(Unavailable, fmt.Sprintf("listing prometheus pods failed: %s", err))
-		return se
+		return StatusError{status: "unavailable", reason: fmt.Sprintf("listing prometheus pods failed: %s", err)}
 	}
 
-	// Add reason for failure to appropriate state - Degraded/Unavailable
-	se := NewStateError()
-	addReason := se.State(Degraded).AddReasons
+	var statusErrors StatusError
 	if available == 0 {
-		se.State(Degraded).AddReasons("None of the prometheus pods are running")
-		addReason = se.State(Unavailable).AddReasons
+		statusErrors = StatusError{status: "unavailable", reason: "None of the prometheus pods are running"}
 	}
 
 	for _, pod := range pods.Items {
@@ -819,7 +815,7 @@ func (c *Client) validatePrometheusPodState(ctx context.Context, p *monv1.Promet
 		case v1.PodFailed, v1.PodSucceeded:
 			// we expect pods to be running & ready all the time
 			msg := fmt.Sprintf("prometheus pod %s has terminated", nsName)
-			addReason(msg)
+			statusErrors = StatusError{status: "unavailable", reason: msg, prevError: &statusErrors}
 
 		case v1.PodPending:
 			for _, cond := range pod.Status.Conditions {
@@ -828,7 +824,7 @@ func (c *Client) validatePrometheusPodState(ctx context.Context, p *monv1.Promet
 				}
 
 				msg := fmt.Sprintf("prometheus pod %s is pending due to %s: %s", nsName, cond.Reason, cond.Message)
-				addReason(msg)
+				statusErrors = StatusError{status: "unavailable", reason: msg, prevError: &statusErrors}
 			}
 
 			// NOTE: case v1.PodUnknown: shouldn't occur
@@ -837,13 +833,12 @@ func (c *Client) validatePrometheusPodState(ctx context.Context, p *monv1.Promet
 			// Deprecated: It isn't being set since 2015 (74da3b14b0c0f658b3bb8d2def5094686d0e9095)
 		}
 	}
-	klog.V(4).ErrorS(se, "validatePrometheusPodState: failed")
 
-	return se
+	return statusErrors
 }
 
-func (c *Client) ValidatePrometheus(ctx context.Context, p *monv1.Prometheus) *StateError {
-	var se *StateError
+func (c *Client) ValidatePrometheus(ctx context.Context, p *monv1.Prometheus) error {
+	var se error
 
 	_ = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 		if err := c.validatePrometheusPodState(ctx, p); err != nil {

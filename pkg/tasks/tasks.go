@@ -70,7 +70,7 @@ func (tg *TaskGroup) RunConcurrently(ctx context.Context) TaskGroupErrors {
 			err := ts.Task.Run(ctx)
 			if err != nil {
 				klog.Warningf("task %d of %d: %v failed: %v", i+1, tgLength, ts.Name, err)
-				errChan <- TaskErr{StateError: err, Name: ts.Name}
+				errChan <- TaskErr{err: err, Name: ts.Name}
 			} else {
 				klog.V(2).Infof("ran task %d of %d: %v", i+1, tgLength, ts.Name)
 			}
@@ -127,12 +127,12 @@ func degradedError(err error) *StateError {
 
 // TaskErr wraps a StateError and adds a Name of the Task failed
 type TaskErr struct {
-	*StateError
+	err  error
 	Name string
 }
 
 type Task interface {
-	Run(ctx context.Context) *StateError
+	Run(ctx context.Context) error
 }
 
 type (
@@ -144,7 +144,7 @@ func (te *TaskErr) Error() string {
 		return ""
 	}
 
-	return fmt.Sprintf("%s: %s", strings.ToLower(te.Name), te.StateError.Error())
+	return fmt.Sprintf("%s: %s", strings.ToLower(te.Name), te.err.Error())
 }
 
 func (tge TaskGroupErrors) Error() string {
@@ -157,21 +157,4 @@ func (tge TaskGroupErrors) Error() string {
 		messages = append(messages, err.Error())
 	}
 	return strings.Join(messages, "\n")
-}
-
-func (tge TaskGroupErrors) ToConsolidatedTaskError() *TaskErr {
-	if len(tge) == 0 {
-		return nil
-	}
-
-	if len(tge) == 1 {
-		return &tge[0]
-	}
-
-	stErr := client.NewStateError()
-	for _, terr := range tge {
-		stErr.Merge(terr.StateError)
-	}
-
-	return &TaskErr{StateError: stErr, Name: "MultipleTasks"}
 }

@@ -16,6 +16,7 @@ package tasks
 
 import (
 	"context"
+	goErrors "errors"
 
 	"github.com/openshift/cluster-monitoring-operator/pkg/client"
 	"github.com/openshift/cluster-monitoring-operator/pkg/manifests"
@@ -39,10 +40,16 @@ func NewPrometheusTask(client *client.Client, factory *manifests.Factory, config
 	}
 }
 
-func (t *PrometheusTask) Run(ctx context.Context) *StateError {
-	createErr := degradedError(t.create(ctx))
-	validate := NewPrometheusValidationTask(t.client, t.prometheus)
-	return client.MergeStateErrors(createErr, validate.Run(ctx))
+func (t *PrometheusTask) Run(ctx context.Context) error {
+	createErr := t.create(ctx)
+	validateErr := NewPrometheusValidationTask(t.client, t.prometheus).Run(ctx)
+	var e, v *client.StatusError
+	if goErrors.As(validateErr, e) {
+		if goErrors.As(createErr, v) {
+			e.Append(*v)
+		}
+	}
+	return validateErr
 }
 
 func (t *PrometheusTask) create(ctx context.Context) error {
@@ -392,7 +399,7 @@ func (t *PrometheusTask) create(ctx context.Context) error {
 	return nil
 }
 
-func (t *PrometheusTask) validate(ctx context.Context) *StateError {
+func (t *PrometheusTask) validate(ctx context.Context) error {
 	klog.V(4).Info("validate Prometheus object")
 	return t.client.ValidatePrometheus(ctx, t.prometheus)
 }
