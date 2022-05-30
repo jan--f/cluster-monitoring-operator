@@ -20,6 +20,7 @@ import (
 	"github.com/openshift/cluster-monitoring-operator/pkg/client"
 	"github.com/openshift/cluster-monitoring-operator/pkg/manifests"
 	"github.com/pkg/errors"
+	apiutilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 )
 
@@ -38,6 +39,26 @@ func NewPrometheusTask(client *client.Client, factory *manifests.Factory, config
 }
 
 func (t *PrometheusTask) Run(ctx context.Context) error {
+
+	errs := []error{}
+
+	err := t.create(ctx)
+	if err != nil {
+		klog.V(4).ErrorS(err, "updation of prometheus failed")
+		errs = append(errs, err)
+	}
+
+	// NOTE: the validation task is run even if creation fails so that existing
+	// deployment is validated.
+	validation := NewPrometheusValidationTask(t.client, t.factory)
+	if err = validation.Run(ctx); err != nil {
+		errs = append(errs, err)
+	}
+
+	return apiutilerrors.NewAggregate(errs)
+}
+
+func (t *PrometheusTask) create(ctx context.Context) error {
 	cacm, err := t.factory.PrometheusK8sServingCertsCABundle()
 	if err != nil {
 		return errors.Wrap(err, "initializing serving certs CA Bundle ConfigMap failed")
@@ -343,12 +364,6 @@ func (t *PrometheusTask) Run(ctx context.Context) error {
 		err = t.client.CreateOrUpdatePrometheus(ctx, p)
 		if err != nil {
 			return errors.Wrap(err, "reconciling Prometheus object failed")
-		}
-
-		klog.V(4).Info("waiting for Prometheus object changes")
-		err = t.client.WaitForPrometheus(ctx, p)
-		if err != nil {
-			return errors.Wrap(err, "waiting for Prometheus object changes failed")
 		}
 	}
 

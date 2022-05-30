@@ -28,10 +28,28 @@ import (
 
 const (
 	unavailableMessage          string = "Rollout of the monitoring stack failed and is degraded. Please investigate the degraded status error."
-	asExpectedReason            string = "AsExpected"
 	StorageNotConfiguredMessage        = "Prometheus is running without persistent storage which can lead to data loss during upgrades and cluster disruptions. Please refer to the official documentation to see how to configure storage for Prometheus: https://docs.openshift.com/container-platform/4.8/monitoring/configuring-the-monitoring-stack.html"
 	StorageNotConfiguredReason         = "PrometheusDataPersistenceNotConfigured"
 )
+
+type Status string
+
+const (
+	TrueStatus    Status = "True"
+	FalseStatus   Status = "False"
+	UnknownStatus Status = "Unknown"
+)
+
+type StateInfo interface {
+	Status() Status
+	Reason() string
+	Message() string
+}
+
+type StatesReport interface {
+	Degraded() StateInfo
+	Available() StateInfo
+}
 
 type StatusReporter struct {
 	client                clientv1.ClusterOperatorInterface
@@ -159,6 +177,31 @@ func (r *StatusReporter) SetRollOutInProgress(ctx context.Context) error {
 	time := metav1.Now()
 	conditions := newConditions(co.Status, r.version, metav1.Now())
 	conditions.setCondition(v1.OperatorProgressing, v1.ConditionTrue, "Rolling out the stack.", "RollOutInProgress", time)
+
+	return r.setConditions(ctx, co, conditions)
+}
+
+func (r *StatusReporter) ReportState(ctx context.Context, report StatesReport) error {
+	co, err := r.getOrCreateClusterOperator(ctx)
+	if err != nil {
+		return err
+	}
+
+	time := metav1.Now()
+
+	conditions := newConditions(co.Status, r.version, time)
+
+	degraded := report.Degraded()
+	// The Reason should be upper case camelCase (PascalCase) according to the API docs.
+	reason := cmostr.ToPascalCase(degraded.Reason())
+
+	conditions.setCondition(v1.OperatorDegraded, v1.ConditionStatus(degraded.Status()),
+		degraded.Message(), reason, time)
+
+	available := report.Available()
+	reason = cmostr.ToPascalCase(available.Reason())
+	conditions.setCondition(v1.OperatorAvailable, v1.ConditionStatus(available.Status()),
+		available.Message(), reason, time)
 
 	return r.setConditions(ctx, co, conditions)
 }

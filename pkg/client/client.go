@@ -17,6 +17,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"reflect"
 	"strings"
@@ -40,6 +41,7 @@ import (
 	"github.com/prometheus-operator/prometheus-operator/pkg/thanos"
 	thanosoperator "github.com/prometheus-operator/prometheus-operator/pkg/thanos"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -51,6 +53,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	apiutilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -827,6 +830,28 @@ func (c *Client) DeleteSecret(ctx context.Context, s *v1.Secret) error {
 	return err
 }
 
+func (c *Client) GetPrometheusByNsName(ctx context.Context, prom types.NamespacedName) (*monv1.Prometheus, error) {
+	var lastErr error
+	var ret *monv1.Prometheus
+
+	if err := wait.Poll(time.Second*10, time.Minute*1, func() (bool, error) {
+		var err error
+		ret, err = c.mclient.MonitoringV1().Prometheuses(prom.Namespace).Get(ctx, prom.Name, metav1.GetOptions{})
+		if err != nil {
+			lastErr = err
+			klog.V(4).ErrorS(err, "GetPrometheusByNsName: failed to get Prometheus object")
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		if err == wait.ErrWaitTimeout && lastErr != nil {
+			err = lastErr
+		}
+		return nil, errors.Wrapf(err, "waiting for Prometheus %s", prom)
+	}
+	return ret, nil
+}
+
 func (c *Client) WaitForPrometheus(ctx context.Context, p *monv1.Prometheus) error {
 	var lastErr error
 	if err := wait.Poll(time.Second*10, time.Minute*5, func() (bool, error) {
@@ -862,6 +887,59 @@ func (c *Client) WaitForPrometheus(ctx context.Context, p *monv1.Prometheus) err
 		return errors.Wrapf(err, "waiting for Prometheus %s/%s", p.GetNamespace(), p.GetName())
 	}
 	return nil
+}
+
+func (c *Client) ValidatePrometheus(ctx context.Context, promNsName types.NamespacedName) error {
+	var validationError error
+
+	pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+
+		p, err := c.GetPrometheusByNsName(ctx, promNsName)
+		if err != nil {
+			klog.V(4).Info("validate prometheus failed to get prometheus: ", err)
+			return false, err
+		}
+
+		avail, err := prometheusConditonForType(p.Status.Conditions, monv1.PrometheusAvailable)
+		if err != nil {
+			validationError = NewUnavailableError(err.Error())
+			return false, nil
+		}
+
+		if avail.Status == monv1.PrometheusConditionTrue {
+			return true, nil // terminate if available
+		}
+
+		// return reason for failure as state-errors - Degraded/Unavailable
+		errs := []error{}
+		msg := fmt.Sprintf("%s: %s", avail.Reason, avail.Message)
+
+		newStateError := NewDegradedError
+		if avail.Status == monv1.PrometheusConditionFalse {
+			// prometheus not available is a Degraded and Unavailable error
+			errs = append(errs, NewDegradedError(msg))
+			newStateError = NewUnavailableError
+		}
+
+		errs = append(errs, newStateError(msg))
+		validationError = apiutilerrors.NewAggregate(errs)
+		return false, nil
+	})
+
+	if pollErr == wait.ErrWaitTimeout {
+		return validationError
+	}
+
+	return nil
+}
+
+func prometheusConditonForType(conditions []monv1.PrometheusCondition, t monv1.PrometheusConditionType) (monv1.PrometheusCondition, error) {
+	for _, c := range conditions {
+		if c.Type == t {
+			return c, nil
+		}
+	}
+	return monv1.PrometheusCondition{}, fmt.Errorf("prometheus: missing condition type - %s", t)
 }
 
 func (c *Client) WaitForAlertmanager(ctx context.Context, a *monv1.Alertmanager) error {
