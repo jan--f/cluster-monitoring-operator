@@ -1034,61 +1034,47 @@ func toStateError(err error) *client.StateError {
 	return client.NewDegradedError(err.Error())
 }
 
-// taskGroupErrorsToStateErrors is a helper function to convert all taskErrors to StateErrors.
-func taskGroupErrorsToStateErrors(tge tasks.TaskGroupErrors) []*client.StateError {
-	serrs := []*client.StateError{}
+func extractStateErrorInfo(err error, degraded, unavail *client.StateError) {
+	sErr := toStateError(err)
+	switch sErr.State {
+	case client.DegradedState:
+		degraded.Reasons = append(degraded.Reasons, sErr.Reasons...)
+		// if any of the errors are marked as unknown, retain that in the report
+		degraded.Unknown = degraded.Unknown || sErr.Unknown
+
+	case client.UnavailableState:
+		unavail.Reasons = append(unavail.Reasons, sErr.Reasons...)
+		unavail.Unknown = unavail.Unknown || sErr.Unknown
+	}
+}
+
+func runReportForTaskGroupErrors(tge tasks.TaskGroupErrors) *runReport {
+
+	degraded := &client.StateError{State: client.DegradedState}
+
+	unavailable := &client.StateError{State: client.UnavailableState}
+
+	rpt := &runReport{
+		name:        tge[0].Name,
+		degraded:    degraded,
+		unavailable: unavailable,
+	}
+	if len(tge) > 1 {
+		rpt.name = "MultipleTasks"
+	}
 
 	for _, te := range tge {
 
 		// unpack aggregate before converting to state errors
 		var aggregate apiutilerrors.Aggregate
 		if errors.As(te.Err, &aggregate) {
-			errs := apiutilerrors.Flatten(aggregate).Errors()
-			for _, err := range errs {
-				serrs = append(serrs, toStateError(err))
+			flatAggregate := apiutilerrors.Flatten(aggregate).Errors()
+			for _, ag := range flatAggregate {
+				extractStateErrorInfo(ag, degraded, unavailable)
 			}
 		} else {
-			serrs = append(serrs, toStateError(te.Err))
+			extractStateErrorInfo(aggregate, degraded, unavailable)
 		}
-	}
-
-	return serrs
-}
-
-func runReportForTaskGroupErrors(tge tasks.TaskGroupErrors) *runReport {
-
-	rpt := &runReport{name: tge[0].Name}
-	if len(tge) > 1 {
-		rpt.name = "MultipleTasks"
-	}
-
-	degraded := &client.StateError{State: client.DegradedState}
-	degradedReasons := []string{}
-
-	unavailable := &client.StateError{State: client.UnavailableState}
-	unavailableReasons := []string{}
-
-	for _, err := range taskGroupErrorsToStateErrors(tge) {
-		switch err.State {
-		case client.DegradedState:
-			degradedReasons = append(degradedReasons, err.Reason)
-			// if any of the errors are marked as unknown, retain that in the report
-			degraded.Unknown = degraded.Unknown || err.Unknown
-
-		case client.UnavailableState:
-			unavailableReasons = append(unavailableReasons, err.Reason)
-			unavailable.Unknown = unavailable.Unknown || err.Unknown
-		}
-	}
-
-	if len(degradedReasons) > 0 {
-		degraded.Reason = strings.Join(degradedReasons, ", ")
-		rpt.degraded = degraded
-	}
-
-	if len(unavailableReasons) > 0 {
-		unavailable.Reason = strings.Join(unavailableReasons, ", ")
-		rpt.unavailable = unavailable
 	}
 
 	return rpt
@@ -1116,7 +1102,7 @@ func (s stateErrorInfo) Status() client.Status {
 }
 
 func (s stateErrorInfo) Message() string {
-	return s.err.Reason
+	return strings.Join(s.err.Reasons, ", ")
 }
 
 func (s stateErrorInfo) Reason() string {

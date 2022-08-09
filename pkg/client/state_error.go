@@ -16,6 +16,7 @@ package client
 
 import (
 	"fmt"
+	"strings"
 )
 
 type State string
@@ -30,7 +31,7 @@ const (
 type StateError struct {
 	State   State
 	Unknown bool
-	Reason  string
+	Reasons []string
 }
 
 var _ error = (*StateError)(nil)
@@ -40,17 +41,17 @@ func (se StateError) Error() string {
 	if se.Unknown {
 		unknown = " (unknown)"
 	}
-	return fmt.Sprintf("%s%s: %s", se.State, unknown, se.Reason)
+	return fmt.Sprintf("%s%s: %s", se.State, unknown, strings.Join(se.Reasons, ", "))
 }
 
 func NewDegradedError(reason string) *StateError {
-	return &StateError{State: DegradedState, Unknown: false, Reason: reason}
+	return &StateError{State: DegradedState, Unknown: false, Reasons: []string{reason}}
 }
 
 func NewUnavailableError(reason string) *StateError {
-	return &StateError{State: UnavailableState, Unknown: false, Reason: reason}
+	return &StateError{State: UnavailableState, Unknown: false, Reasons: []string{reason}}
 }
 
 func NewUnknownStateError(s State, reason string) *StateError {
-	return &StateError{State: s, Unknown: true, Reason: reason}
+	return &StateError{State: s, Unknown: true, Reasons: []string{reason}}
 }
