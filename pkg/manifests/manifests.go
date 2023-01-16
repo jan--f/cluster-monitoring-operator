@@ -276,8 +276,16 @@ var (
 	ControlPlaneKubeletServiceMonitor   = "control-plane/service-monitor-kubelet.yaml"
 	ControlPlaneKubeletServiceMonitorPA = "control-plane/service-monitor-kubelet-resource-metrics.yaml"
 	ControlPlaneEtcdServiceMonitor      = "control-plane/service-monitor-etcd.yaml"
-)
 
+	MetricsServerAuthDelegator      = "metrics-server/auth-delegator.yaml"
+	MetricsServerAuthReader         = "metrics-server/auth-reader.yaml"
+	MetricsServerAPIService         = "metrics-server/metrics-apiservice.yaml"
+	MetricsServerClusterRole        = "metrics-server/metrics-server-cluster-role.yaml"
+	MetricsServerClusterRoleBinding = "metrics-server/metrics-server-cluster-role-binding.yaml"
+	MetricsServerDeployment         = "metrics-server/metrics-server-deployment.yaml"
+	MetricsServerService            = "metrics-server/metrics-server-service.yaml"
+	MetricsServerServiceAccount     = "metrics-server/metrics-server-service-account.yaml"
+)
 var (
 	PrometheusConfigReloaderFlag                         = "--prometheus-config-reloader="
 	PrometheusOperatorPrometheusInstanceNamespacesFlag   = "--prometheus-instance-namespaces="
@@ -4200,6 +4208,78 @@ func NewValidatingWebhook(manifest io.Reader) (*admissionv1.ValidatingWebhookCon
 	}
 
 	return &v, nil
+}
+
+func (f *Factory) MetricsServerAuthDelegator() (*rbacv1.ClusterRoleBinding, error) {
+	s, err := f.NewClusterRoleBinding(f.assets.MustNewAssetReader(MetricsServerAuthDelegator))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerAuthReader() (*rbacv1.RoleBinding, error) {
+	s, err := f.NewRoleBinding(f.assets.MustNewAssetReader(MetricsServerAuthReader))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerAPIService() (*apiregistrationv1.APIService, error) {
+	s, err := f.NewAPIService(f.assets.MustNewAssetReader(MetricsServerAPIService))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerClusterRole() (*rbacv1.ClusterRole, error) {
+	s, err := f.NewClusterRole(f.assets.MustNewAssetReader(MetricsServerClusterRole))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerClusterRoleBinding() (*rbacv1.ClusterRoleBinding, error) {
+	s, err := f.NewClusterRoleBinding(f.assets.MustNewAssetReader(MetricsServerClusterRoleBinding))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerDeployment() (*appsv1.Deployment, error) {
+	s, err := f.NewDeployment(f.assets.MustNewAssetReader(MetricsServerDeployment))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerService() (*v1.Service, error) {
+	s, err := f.NewService(f.assets.MustNewAssetReader(MetricsServerService))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (f *Factory) MetricsServerServiceAccount() (*v1.ServiceAccount, error) {
+	s, err := f.NewServiceAccount(f.assets.MustNewAssetReader(MetricsServerServiceAccount))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 // HashTrustedCA synthesizes a configmap just by copying "ca-bundle.crt" from the given configmap

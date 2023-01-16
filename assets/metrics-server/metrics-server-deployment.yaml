@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-server
+  namespace: openshift-monitoring
+  labels:
+    k8s-app: metrics-server
+spec:
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  template:
+    metadata:
+      name: metrics-server
+      labels:
+        k8s-app: metrics-server
+    spec:
+      serviceAccountName: metrics-server
+      volumes:
+      # mount in tmp so we can safely use from-scratch images and/or read-only containers
+      - name: tmp-dir
+        emptyDir: {}
+      - name: secret-metrics-client-certs
+        secret:
+          secretName: metrics-client-certs
+      - configMap:
+          name: kubelet-serving-ca-bundle
+        name: configmap-kubelet-serving-ca-bundle
+      containers:
+      - name: metrics-server
+        image: gcr.io/k8s-staging-metrics-server/metrics-server:master
+        imagePullPolicy: Always
+        args:
+          - --cert-dir=/tmp
+          - --secure-port=10250
+          - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+          - --kubelet-use-node-status-port
+          # - --kubelet-insecure-tls
+          - --metric-resolution=15s
+          - --kubelet-certificate-authority=/etc/tls/kubelet-serving-ca-bundle/ca-bundle.crt
+          - --kubelet-client-certificate=/etc/tls/metrics-client-certs/tls.crt
+          - --kubelet-client-key=/etc/tls/metrics-client-certs/tls.key
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+        - mountPath: /etc/tls/metrics-client-certs
+          name: secret-metrics-client-certs
+        - mountPath: /etc/tls/kubelet-serving-ca-bundle
+          name: configmap-kubelet-serving-ca-bundle
+        ports:
+        - name: https
+          containerPort: 10250
+          protocol: TCP

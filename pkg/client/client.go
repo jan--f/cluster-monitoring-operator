@@ -1660,6 +1660,15 @@ func (c *Client) CreateOrUpdateServiceMonitor(ctx context.Context, sm *monv1.Ser
 	return errors.Wrap(err, "updating ServiceMonitor object failed")
 }
 
+func (c *Client) DeleteAPIService(ctx context.Context, apiService *apiregistrationv1.APIService) error {
+	apsc := c.aggclient.ApiregistrationV1().APIServices()
+	err := apsc.Delete(ctx, apiService.GetName(), metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 func (c *Client) CreateOrUpdateAPIService(ctx context.Context, apiService *apiregistrationv1.APIService) error {
 	apsc := c.aggclient.ApiregistrationV1().APIServices()
 	existing, err := apsc.Get(ctx, apiService.GetName(), metav1.GetOptions{})

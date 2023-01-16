@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-server
+  namespace: openshift-monitoring
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: metrics-server-tls
+  labels:
+    kubernetes.io/name: metrics-server
+    app.kubernetes.io/component: metrics-adapter
+    app.kubernetes.io/part-of: openshift-monitoring
+spec:
+  selector:
+    k8s-app: metrics-server
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
