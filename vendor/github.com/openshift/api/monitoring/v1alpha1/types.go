@@ -31,7 +31,13 @@ import (
 // +genclient
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:path=alertingrules,scope=Namespaced
 // +kubebuilder:subresource:status
+// +openshift:api-approved.openshift.io=https://github.com/openshift/api/pull/1179
+// +openshift:file-pattern=cvoRunLevel=0000_50,operatorName=monitoring,operatorOrdering=01
+// +openshift:enable:FeatureGate=AlertingRules
+// +kubebuilder:metadata:annotations="description=OpenShift Monitoring alerting rules"
 type AlertingRule struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -230,6 +236,13 @@ type PrometheusRuleRef struct {
 // Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
 // +openshift:compatibility-gen:level=4
 // +k8s:openapi-gen=true
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:path=alertrelabelconfigs,scope=Namespaced
+// +kubebuilder:subresource:status
+// +openshift:api-approved.openshift.io=https://github.com/openshift/api/pull/1179
+// +openshift:file-pattern=cvoRunLevel=0000_50,operatorName=monitoring,operatorOrdering=02
+// +openshift:enable:FeatureGate=AlertingRules
+// +kubebuilder:metadata:annotations="description=OpenShift Monitoring alert relabel configurations"
 type AlertRelabelConfig struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -346,4 +359,126 @@ type RelabelConfig struct {
 	// +kubebuilder:default=Replace
 	// +optional
 	Action string `json:"action,omitempty"`
+}
+
+// ObservabilityDataExportList is a list of ObservabilityDataExports.
+//
+// Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
+// +openshift:compatibility-gen:level=4
+// +k8s:openapi-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ObservabilityDataExportList struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata is the standard list's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// items is a list of AlertRelabelConfigs.
+	Items []*ObservabilityDataExport `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
+
+// ObservabilityDataExport defines a set of observability data export pipelines
+//
+// Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
+// +openshift:compatibility-gen:level=4
+// +k8s:openapi-gen=true
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:path=observabilitydataexport,scope=Namespaced
+// +kubebuilder:subresource:status
+// +openshift:api-approved.openshift.io=https://github.com/openshift/api/pull/TBD
+// +openshift:file-pattern=cvoRunLevel=0000_50,operatorName=monitoring,operatorOrdering=03
+// +openshift:enable:FeatureGate=ObservabilityDataExport
+// +kubebuilder:metadata:annotations="description=OpenShift observability data export pipelines"
+type ObservabilityDataExport struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata is the standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// spec describes the desired state of this ObservabilityDataExport object.
+	Spec ObservabilityDataExportSpec `json:"spec"`
+
+	// status describes the current state of this ObservabilityDataExport object.
+	//
+	// +optional
+	Status ObservabilityDataExportStatus `json:"status,omitempty"`
+}
+
+// ObservabilityDataExportSpec is the desired state of an
+// ObservabilityDataExport resource.
+//
+// +k8s:openapi-gen=true
+type ObservabilityDataExportSpec struct {
+	Sources         []DataSource         `json:"sources,omitempty"`
+	Transformations []DataTransformation `json:"transformations,omitempty"`
+	Sinks           []DataSink           `json:"sinks,omitempty"`
+	Exporters       []DataExporter       `json:"exporters,omitempty"`
+}
+
+// ObservabilityDataExportStatus is the status of an ObservabilityDataExport resource.
+type ObservabilityDataExportStatus struct {
+	// conditions contains details on the state of the
+	// ObservabilityDataExport, may be
+	// empty.
+	//
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+type DataSource struct {
+	Name string `json:"name,omitempty"`
+	// use discrimated unions here, see https://github.com/openshift/enhancements/blob/master/dev-guide/api-conventions.md#discriminated-unions
+	// +unionDiscriminator
+	// +kubebuilder:validation:Enum=PrometheusFederate
+	// +kubebuilder:validation:Required
+	Type string `json:"type,omitempty"`
+	// not sure if validations a la https://github.com/kubernetes-sigs/controller-tools/issues/461#issuecomment-1982741599 make any sense here
+	// +optional
+	PrometheusFederateSpec *PrometheusFederateSpec `json:"prometheusFederateSpec,omitempty"`
+}
+
+type PrometheusFederateSpec struct {
+	Interval Duration `json:"interval,omitempty"`
+	Target   string   `json:"target,omitempty"`
+	Matchers []string `json:"matchers,omitempty"`
+}
+
+// Duration is a valid time duration that can be parsed by Prometheus model.ParseDuration() function.
+// Supported units: y, w, d, h, m, s, ms
+// Examples: `30s`, `1m`, `1h20m15s`, `15d`
+// +kubebuilder:validation:Pattern:="^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$"
+type Duration string
+
+type DataTransformation struct {
+	// +kubebuilder:validation:Enum=PrometheusRule
+	// +optional
+	Type string                 `json:"type,omitempty"`
+	Spec DataTransformationSpec `json:"dataTransformationSpec,omitempty"`
+}
+
+type DataTransformationSpec struct {
+}
+
+type DataSink struct {
+	Name string `json:"name,omitempty"`
+	// +unionDiscriminator
+	// +kubebuilder:validation:Enum=PrometheusRemoteWrite
+	// +kubebuilder:validation:Required
+	Type string `json:"type,omitempty"`
+	// +optional
+	PrometheusRemoteWriteSpec *PrometheusRemoteWriteSpec `json:"prometheusRemoteWriteSpec,omitempty"`
+}
+
+type PrometheusRemoteWriteSpec struct {
+	URL  string `json:"url,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+type DataExporter struct {
 }

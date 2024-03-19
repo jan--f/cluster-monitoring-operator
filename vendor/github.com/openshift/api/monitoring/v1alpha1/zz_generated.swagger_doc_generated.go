@@ -90,6 +90,53 @@ func (AlertingRuleStatus) SwaggerDoc() map[string]string {
 	return map_AlertingRuleStatus
 }
 
+var map_DataSource = map[string]string{
+	"type":                   "use discrimated unions here, see https://github.com/openshift/enhancements/blob/master/dev-guide/api-conventions.md#discriminated-unions",
+	"prometheusFederateSpec": "not sure if validations a la https://github.com/kubernetes-sigs/controller-tools/issues/461#issuecomment-1982741599 make any sense here",
+}
+
+func (DataSource) SwaggerDoc() map[string]string {
+	return map_DataSource
+}
+
+var map_ObservabilityDataExport = map[string]string{
+	"":         "ObservabilityDataExport defines a set of observability data export pipelines\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+	"metadata": "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+	"spec":     "spec describes the desired state of this ObservabilityDataExport object.",
+	"status":   "status describes the current state of this ObservabilityDataExport object.",
+}
+
+func (ObservabilityDataExport) SwaggerDoc() map[string]string {
+	return map_ObservabilityDataExport
+}
+
+var map_ObservabilityDataExportList = map[string]string{
+	"":         "ObservabilityDataExportList is a list of ObservabilityDataExports.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+	"metadata": "metadata is the standard list's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+	"items":    "items is a list of AlertRelabelConfigs.",
+}
+
+func (ObservabilityDataExportList) SwaggerDoc() map[string]string {
+	return map_ObservabilityDataExportList
+}
+
+var map_ObservabilityDataExportSpec = map[string]string{
+	"": "ObservabilityDataExportSpec is the desired state of an ObservabilityDataExport resource.",
+}
+
+func (ObservabilityDataExportSpec) SwaggerDoc() map[string]string {
+	return map_ObservabilityDataExportSpec
+}
+
+var map_ObservabilityDataExportStatus = map[string]string{
+	"":           "ObservabilityDataExportStatus is the status of an ObservabilityDataExport resource.",
+	"conditions": "conditions contains details on the state of the ObservabilityDataExport, may be empty.",
+}
+
+func (ObservabilityDataExportStatus) SwaggerDoc() map[string]string {
+	return map_ObservabilityDataExportStatus
+}
+
 var map_PrometheusRuleRef = map[string]string{
 	"":     "PrometheusRuleRef is a reference to an existing PrometheusRule object.  Each AlertingRule instance results in a generated PrometheusRule object in the same namespace, which is always the openshift-monitoring namespace.  This is used to point to the generated PrometheusRule object in the AlertingRule status.",
 	"name": "name of the referenced PrometheusRule.",
