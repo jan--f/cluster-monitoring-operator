@@ -259,6 +259,145 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.openshift.api.monitoring.v1alpha1.PrometheusRuleRef
       default: {}
+- name: com.github.openshift.api.monitoring.v1alpha1.DataExporter
+  map:
+    elementType:
+      scalar: untyped
+      list:
+        elementType:
+          namedType: __untyped_atomic_
+        elementRelationship: atomic
+      map:
+        elementType:
+          namedType: __untyped_deduced_
+        elementRelationship: separable
+- name: com.github.openshift.api.monitoring.v1alpha1.DataSink
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+    - name: prometheusRemoteWriteSpec
+      type:
+        namedType: com.github.openshift.api.monitoring.v1alpha1.PrometheusRemoteWriteSpec
+    - name: type
+      type:
+        scalar: string
+- name: com.github.openshift.api.monitoring.v1alpha1.DataSource
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+    - name: prometheusFederateSpec
+      type:
+        namedType: com.github.openshift.api.monitoring.v1alpha1.PrometheusFederateSpec
+    - name: type
+      type:
+        scalar: string
+- name: com.github.openshift.api.monitoring.v1alpha1.DataTransformation
+  map:
+    fields:
+    - name: dataTransformationSpec
+      type:
+        namedType: com.github.openshift.api.monitoring.v1alpha1.DataTransformationSpec
+      default: {}
+    - name: type
+      type:
+        scalar: string
+- name: com.github.openshift.api.monitoring.v1alpha1.DataTransformationSpec
+  map:
+    elementType:
+      scalar: untyped
+      list:
+        elementType:
+          namedType: __untyped_atomic_
+        elementRelationship: atomic
+      map:
+        elementType:
+          namedType: __untyped_deduced_
+        elementRelationship: separable
+- name: com.github.openshift.api.monitoring.v1alpha1.ObservabilityDataExport
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.openshift.api.monitoring.v1alpha1.ObservabilityDataExportSpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.openshift.api.monitoring.v1alpha1.ObservabilityDataExportStatus
+      default: {}
+- name: com.github.openshift.api.monitoring.v1alpha1.ObservabilityDataExportSpec
+  map:
+    fields:
+    - name: exporters
+      type:
+        list:
+          elementType:
+            namedType: com.github.openshift.api.monitoring.v1alpha1.DataExporter
+          elementRelationship: atomic
+    - name: sinks
+      type:
+        list:
+          elementType:
+            namedType: com.github.openshift.api.monitoring.v1alpha1.DataSink
+          elementRelationship: atomic
+    - name: sources
+      type:
+        list:
+          elementType:
+            namedType: com.github.openshift.api.monitoring.v1alpha1.DataSource
+          elementRelationship: atomic
+    - name: transformations
+      type:
+        list:
+          elementType:
+            namedType: com.github.openshift.api.monitoring.v1alpha1.DataTransformation
+          elementRelationship: atomic
+- name: com.github.openshift.api.monitoring.v1alpha1.ObservabilityDataExportStatus
+  map:
+    fields:
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
+          elementRelationship: atomic
+- name: com.github.openshift.api.monitoring.v1alpha1.PrometheusFederateSpec
+  map:
+    fields:
+    - name: interval
+      type:
+        scalar: string
+    - name: matchers
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: target
+      type:
+        scalar: string
+- name: com.github.openshift.api.monitoring.v1alpha1.PrometheusRemoteWriteSpec
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+    - name: url
+      type:
+        scalar: string
 - name: com.github.openshift.api.monitoring.v1alpha1.PrometheusRuleRef
   map:
     fields:

@@ -10,7 +10,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-kit/log v0.2.1
 	github.com/imdario/mergo v0.3.16
-	github.com/openshift/api v0.0.0-20231218131639-7a5aa77cc72d
+	github.com/openshift/api v0.0.0-20240214213616-e741d64e9f22
 	github.com/openshift/client-go v0.0.0-20231218140158-47f6d749b9d9
 	github.com/openshift/library-go v0.0.0-20240216151214-738f3fa4ccf8
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.71.0
@@ -140,3 +140,5 @@ require (
 )
 
 replace github.com/openshift/api => github.com/jan--f/api v0.0.0-20240320062259-d8590daea6e5
+
+replace github.com/openshift/client-go => github.com/jan--f/client-go v0.0.0-20240321154251-923a1f2e40ae

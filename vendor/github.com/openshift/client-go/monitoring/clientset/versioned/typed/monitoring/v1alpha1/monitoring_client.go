@@ -14,6 +14,7 @@ type MonitoringV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AlertRelabelConfigsGetter
 	AlertingRulesGetter
+	ObservabilityDataExportsGetter
 }
 
 // MonitoringV1alpha1Client is used to interact with features provided by the monitoring.openshift.io group.
@@ -27,6 +28,10 @@ func (c *MonitoringV1alpha1Client) AlertRelabelConfigs(namespace string) AlertRe
 
 func (c *MonitoringV1alpha1Client) AlertingRules(namespace string) AlertingRuleInterface {
 	return newAlertingRules(c, namespace)
+}
+
+func (c *MonitoringV1alpha1Client) ObservabilityDataExports(namespace string) ObservabilityDataExportInterface {
+	return newObservabilityDataExports(c, namespace)
 }
 
 // NewForConfig creates a new MonitoringV1alpha1Client for the given config.
