@@ -34,6 +34,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	apiutilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -49,6 +50,11 @@ import (
 	"github.com/openshift/cluster-monitoring-operator/pkg/manifests"
 	"github.com/openshift/cluster-monitoring-operator/pkg/metrics"
 	"github.com/openshift/cluster-monitoring-operator/pkg/tasks"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // InfrastructureConfig stores information about the cluster infrastructure
@@ -189,6 +195,7 @@ type Operator struct {
 
 	ruleController    *alert.RuleController
 	relabelController *alert.RelabelConfigController
+	manager           manager.Manager
 }
 
 func New(
@@ -236,6 +243,17 @@ func New(
 		return nil, fmt.Errorf("failed to create alert relabel config controller: %w", err)
 	}
 
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme: NewScheme(),
+		// Metrics: metricsserver.Options{
+		// 	BindAddress: cfg.MetricsAddr,
+		// },
+		// HealthProbeBindAddress: cfg.HealthProbeAddr,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create manager: %w", err)
+	}
+
 	o := &Operator{
 		images:                    images,
 		telemetryMatches:          telemetryMatches,
@@ -254,6 +272,7 @@ func New(
 		controllersToRunFunc:      make([]func(context.Context, int), 0),
 		ruleController:            ruleController,
 		relabelController:         relabelController,
+		manager:                   mgr,
 	}
 
 	informer := cache.NewSharedIndexInformer(
@@ -1207,4 +1226,15 @@ func (r runReport) Available() client.StateInfo {
 
 func (r runReport) Degraded() client.StateInfo {
 	return r.degraded
+}
+
+func NewScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	// utilruntime.Must(rhobsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	// utilruntime.Must(monitoringv1.AddToScheme(scheme))
+
+	return scheme
 }

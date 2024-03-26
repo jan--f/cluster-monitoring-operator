@@ -417,6 +417,19 @@ func (c *Client) ClusterOperatorListWatch(ctx context.Context, name string) *cac
 	}
 }
 
+func (c *Client) ObservabilityDataExportListWatch(ctx context.Context) *cache.ListWatch {
+	odeInterface := c.osmclient.MonitoringV1alpha1().ObservabilityDataExports(v1.NamespaceAll)
+
+	return &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return odeInterface.List(ctx, metav1.ListOptions{})
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return odeInterface.Watch(ctx, options)
+		},
+	}
+}
+
 func (c *Client) HasRouteCapability(ctx context.Context) (bool, error) {
 	_, err := c.oscclient.ConfigV1().ClusterOperators().Get(ctx, "ingress", metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
