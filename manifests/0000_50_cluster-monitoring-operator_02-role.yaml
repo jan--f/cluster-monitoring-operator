@@ -464,6 +464,10 @@ rules:
   verbs:
   - get
 - nonResourceURLs:
+  - /federate
+  verbs:
+  - get
+- nonResourceURLs:
   - /metrics
   - /metrics/slis
   verbs:

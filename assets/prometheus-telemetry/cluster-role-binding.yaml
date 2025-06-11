@@ -1,0 +1,38 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/instance: telemetry
+    app.kubernetes.io/managed-by: cluster-monitoring-operator
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: openshift-monitoring
+  name: prometheus-telemetry
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-telemetry
+subjects:
+- kind: ServiceAccount
+  name: prometheus-telemetry
+  namespace: openshift-monitoring
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   labels:
+#     app.kubernetes.io/component: prometheus
+#     app.kubernetes.io/instance: telemetry
+#     app.kubernetes.io/managed-by: cluster-monitoring-operator
+#     app.kubernetes.io/name: prometheus
+#     app.kubernetes.io/part-of: openshift-monitoring
+#   name: prometheus-telemetry-view
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: cluster-monitoring-view
+# subjects:
+# - kind: ServiceAccount
+#   name: prometheus-telemetry
+#   namespace: openshift-monitoring

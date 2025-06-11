@@ -168,6 +168,13 @@ var (
 	PrometheusK8sPodDisruptionBudget              = "prometheus-k8s/pod-disruption-budget.yaml"
 	PrometheusK8sTelemetry                        = "prometheus-k8s/telemetry-secret.yaml"
 
+	PrometheusTelemetry                     = "prometheus-telemetry/prometheus.yaml"
+	PrometheusTelemetryClusterRole          = "prometheus-telemetry/cluster-role.yaml"
+	PrometheusTelemetryClusterRoleBinding   = "prometheus-telemetry/cluster-role-binding.yaml"
+	PrometheusTelemetryServiceAccount       = "prometheus-telemetry/service-account.yaml"
+	PrometheusTelemetryServingCertsCABundle = "prometheus-telemetry/serving-certs-ca-bundle.yaml"
+	PrometheusTelemetryScrapeSecret         = "prometheus-telemetry/telemetry-scrape-secret.yaml"
+
 	PrometheusUserWorkloadServingCertsCABundle                = "prometheus-user-workload/serving-certs-ca-bundle.yaml"
 	PrometheusUserWorkloadTrustedCABundle                     = "prometheus-user-workload/trusted-ca-bundle.yaml"
 	PrometheusUserWorkloadServiceAccount                      = "prometheus-user-workload/service-account.yaml"
@@ -1873,6 +1880,121 @@ func validateAuditProfile(profile auditv1.Level) error {
 		// a wrong profile name is a Config validation Error
 		return fmt.Errorf("%w - adapter audit profile: %s", ErrConfigValidation, profile)
 	}
+}
+
+func (f *Factory) PrometheusTelemetry() (*monv1.Prometheus, error) {
+	p, err := f.NewPrometheus(f.assets.MustNewAssetSlice(PrometheusTelemetry))
+	if err != nil {
+		return nil, err
+	}
+
+	// if f.config.ClusterMonitoringConfiguration.TelemeterClientConfig.IsEnabled() && f.config.RemoteWrite {
+	// 	selectorRelabelConfig, err := promqlgen.LabelSelectorsToRelabelConfig(f.config.ClusterMonitoringConfiguration.PrometheusK8sConfig.TelemetryMatches)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("generate label selector relabel config: %w", err)
+	// 	}
+	//
+	// 	p.Spec.Secrets = append(p.Spec.Secrets, telemetrySecret.GetName())
+	//
+	// 	spec := monv1.RemoteWriteSpec{
+	// 		URL:             f.config.ClusterMonitoringConfiguration.TelemeterClientConfig.TelemeterServerURL,
+	// 		BearerTokenFile: fmt.Sprintf("/etc/prometheus/secrets/%s/%s", telemetrySecret.GetName(), telemetryTokenSecretKey),
+	// 		QueueConfig: &monv1.QueueConfig{
+	// 			// Amount of samples to load from the WAL into the in-memory
+	// 			// buffer before waiting for samples to be sent successfully
+	// 			// and then continuing to read from the WAL.
+	// 			Capacity: 30000,
+	// 			// Should we accumulate 10000 samples before the batch send
+	// 			// deadline is reached, we will send this amount of samples
+	// 			// anyway.
+	// 			MaxSamplesPerSend: 10000,
+	// 			// Batch samples for 1m until we send them if we not reach the
+	// 			// 10000 MaxSamplesPerSend first.
+	// 			BatchSendDeadline: ptr.To(monv1.Duration("1m")),
+	// 			// Backoff is doubled on every backoff. We start with 1s
+	// 			// backoff and double until the MaxBackOff.
+	// 			MinBackoff: ptr.To(monv1.Duration("1s")),
+	// 			// 128s is the 8th backoff in a row, once we end up here, we
+	// 			// don't increase backoff time anymore. As we would at most
+	// 			// produce (concurrency/256) number of requests per second.
+	// 			MaxBackoff: ptr.To(monv1.Duration("256s")),
+	// 		},
+	// 		WriteRelabelConfigs: []monv1.RelabelConfig{
+	// 			*selectorRelabelConfig,
+	// 			{
+	// 				TargetLabel: "_id",
+	// 				Replacement: ptr.To(clusterID),
+	// 			},
+	// 			// relabeling the `ALERTS` series to `alerts` allows us to make
+	// 			// a distinction between the series produced in-cluster and out
+	// 			// of cluster.
+	// 			{
+	// 				SourceLabels: []monv1.LabelName{"__name__"},
+	// 				TargetLabel:  "__name__",
+	// 				Regex:        "ALERTS",
+	// 				Replacement:  ptr.To("alerts"),
+	// 			},
+	// 		},
+	// 		MetadataConfig: &monv1.MetadataConfig{
+	// 			Send: false,
+	// 		},
+	// 	}
+	//
+	// 	p.Spec.RemoteWrite = []monv1.RemoteWriteSpec{spec}
+	// }
+	//
+	// if len(f.config.ClusterMonitoringConfiguration.PrometheusK8sConfig.RemoteWrite) > 0 {
+	// 	p.Spec.RemoteWrite = addRemoteWriteConfigs(clusterID, p.Spec.RemoteWrite, f.config.ClusterMonitoringConfiguration.PrometheusK8sConfig.RemoteWrite...)
+	// }
+	return p, nil
+}
+
+func (f *Factory) PrometheusTelemetryServingCertsCABundle() (*v1.ConfigMap, error) {
+	return f.NewConfigMap(f.assets.MustNewAssetSlice(PrometheusTelemetryServingCertsCABundle))
+}
+
+func (f *Factory) PrometheusTelemetryClusterRole() (*rbacv1.ClusterRole, error) {
+	return f.NewClusterRole(f.assets.MustNewAssetSlice(PrometheusTelemetryClusterRole))
+}
+
+func (f *Factory) PrometheusTelemetryClusterRoleBinding() (*rbacv1.ClusterRoleBinding, error) {
+	return f.NewClusterRoleBinding(f.assets.MustNewAssetSlice(PrometheusTelemetryClusterRoleBinding))
+}
+
+func (f *Factory) PrometheusTelemetryServiceAccount() (*v1.ServiceAccount, error) {
+	return f.NewServiceAccount(f.assets.MustNewAssetSlice(PrometheusTelemetryServiceAccount))
+}
+
+func (f *Factory) PrometheusTelemetryScrapeSecret() (*v1.Secret, error) {
+	s, err := f.NewSecret(f.assets.MustNewAssetSlice(PrometheusTelemetryScrapeSecret))
+	if err != nil {
+		return nil, err
+	}
+
+	var scrapeConfig strings.Builder
+	scrapeConfig.WriteString(`- job_name: telemetry-scrape
+  static_configs:
+    - targets:
+        - prometheus-k8s.openshift-monitoring.svc:9092
+  metrics_path: /federate
+  scrape_interval: 4m30s
+  scheme: https
+  tls_config:
+    ca_file: /etc/serving-certs-ca-bundle/service-ca.crt
+    key_file: /etc/tls/private/tls.key
+    cert_file: /etc/tls/private/tls.crt
+  params:
+    match[]:
+`)
+
+	for _, m := range f.config.ClusterMonitoringConfiguration.PrometheusK8sConfig.TelemetryMatches {
+		scrapeConfig.WriteString(fmt.Sprintf("        - '%s'\n", m))
+	}
+
+	b := make([]byte, base64.StdEncoding.EncodedLen(scrapeConfig.Len()))
+	base64.StdEncoding.Encode(b, []byte(scrapeConfig.String()))
+	s.Data["telemetry-scrape.yaml"] = []byte(scrapeConfig.String())
+	return s, nil
 }
 
 func (f *Factory) MetricsServerConfigMapAuditPolicy() (*v1.ConfigMap, error) {
