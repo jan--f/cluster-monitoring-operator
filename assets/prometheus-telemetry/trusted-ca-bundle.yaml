@@ -3,9 +3,10 @@ data: {}
 kind: ConfigMap
 metadata:
   annotations:
-    service.beta.openshift.io/inject-cabundle: "true"
+    openshift.io/owning-component: Monitoring
   labels:
     app.kubernetes.io/managed-by: cluster-monitoring-operator
     app.kubernetes.io/part-of: openshift-monitoring
-  name: serving-certs-ca-bundle
+    config.openshift.io/inject-trusted-cabundle: "true"
+  name: prometheus-telemetry-trusted-ca-bundle
   namespace: openshift-monitoring

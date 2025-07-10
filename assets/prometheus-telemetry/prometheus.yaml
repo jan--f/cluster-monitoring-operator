@@ -1,89 +1,89 @@
 apiVersion: monitoring.coreos.com/v1
 kind: Prometheus
 metadata:
-  annotations:
+  instance:
     operator.prometheus.io/controller-id: openshift-monitoring/prometheus-operator
   labels:
-    app.kubernetes.io/component: prometheus
-    app.kubernetes.io/instance: telemetry
+    app.kubernetes.io/component: prometheus-telemetry
     app.kubernetes.io/managed-by: cluster-monitoring-operator
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: prometheus-telemetry
     app.kubernetes.io/part-of: openshift-monitoring
-    app.kubernetes.io/version: 3.3.1
   name: telemetry
   namespace: openshift-monitoring
 spec:
-  additionalScrapeConfigs:
-    name: telemetry-scrape
-    key: telemetry-scrape.yaml
-  serviceMonitorNamespaceSelector: null
-  serviceMonitorSelector:
-    matchLabels:
-      app.kubernetes.io/instance: telemetry
   additionalArgs:
   - name: scrape.timestamp-tolerance
     value: 15ms
-  affinity:
-    podAntiAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchLabels:
-            app.kubernetes.io/component: prometheus
-            app.kubernetes.io/instance: telemetry
-            app.kubernetes.io/name: prometheus
-            app.kubernetes.io/part-of: openshift-monitoring
-        namespaces:
-        - openshift-monitoring
-        topologyKey: kubernetes.io/hostname
+  additionalScrapeConfigs:
+    key: telemetry-scrape.yaml
+    name: telemetry-scrape
+  configMaps:
+  - serving-certs-ca-bundle
+  - kubelet-serving-ca-bundle
+  - metrics-client-ca
   containers:
-  - name: prometheus
+  - env:
+    - name: HTTP_PROXY
+      value: ""
+    - name: HTTPS_PROXY
+      value: ""
+    - name: NO_PROXY
+      value: ""
+    name: prometheus
     terminationMessagePolicy: FallbackToLogsOnError
     volumeMounts:
-    - mountPath: /etc/serving-certs-ca-bundle
-      name: serving-certs-ca-bundle
-      readOnly: false
+    - mountPath: /etc/pki/ca-trust/extracted/pem/
+      name: prometheus-telemetry-trusted-ca-bundle
     - mountPath: /etc/tls/private
-      name: federate-client-tls
-      readOnly: false
-    ports:
-    - containerPort: 9090
-      name: web
+      name: secret-prometheus-telemetry-tls
+    - mountPath: /etc/tls/client
+      name: metrics-client-ca
+      readOnly: true
   enableFeatures:
   - delayed-compaction
-  externalLabels: {}
-  externalURL: https://prometheus-telemetry.openshift-monitoring.svc:9090
-  image: quay.io/prometheus/prometheus:v3.3.1
   listenLocal: true
   maximumStartupDurationSeconds: 3600
-  nodeSelector:
-    kubernetes.io/os: linux
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: prometheus
+          app.kubernetes.io/instance: telemetry
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/part-of: openshift-monitoring
+      namespaces:
+      - openshift-monitoring
+      topologyKey: kubernetes.io/hostname
   podMetadata:
     annotations:
       openshift.io/required-scc: nonroot
       target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
-    labels:
-      app.kubernetes.io/component: prometheus
-      app.kubernetes.io/instance: telemetry
-      app.kubernetes.io/name: prometheus
-      app.kubernetes.io/part-of: openshift-monitoring
-      app.kubernetes.io/version: 3.3.1
   priorityClassName: system-cluster-critical
   replicas: 1
   resources:
     requests:
       cpu: 70m
       memory: 1Gi
+  scrapeClasses: []
+  scrapeConfigNamespaceSelector: null
+  scrapeConfigSelector: null
+  secrets:
+  - metrics-client-certs
   securityContext:
     fsGroup: 65534
     runAsNonRoot: true
     runAsUser: 65534
-  serviceAccountName: prometheus-telemetry
+  serviceMonitorSelector:
+    matchLabels:
+      app.kubernetes.io/instance: telemetry
   volumes:
   - configMap:
-      name: telemetry-prometheus-serving-certs-ca-bundle
-    name: serving-certs-ca-bundle
-  - name: federate-client-tls
-    secret:
-      secretName: federate-client-certs
-  configMaps:
-  - telemetry-prometheus-serving-certs-ca-bundle
+      items:
+      - key: ca-bundle.crt
+        path: tls-ca-bundle.pem
+      name: prometheus-telemetry-trusted-ca-bundle
+    name: prometheus-telemetry-trusted-ca-bundle
+  web:
+    httpConfig:
+      headers:
+        contentSecurityPolicy: frame-ancestors 'none'

@@ -2,18 +2,13 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/component: prometheus
-    app.kubernetes.io/instance: telemetry
+    app.kubernetes.io/component: prometheus-telemetry
+    app.kubernetes.io/instance: prometheus-telemetry
     app.kubernetes.io/managed-by: cluster-monitoring-operator
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: prometheus-telemetry
     app.kubernetes.io/part-of: openshift-monitoring
-    app.kubernetes.io/version: 3.3.1
-  name: prometheus-telemetry
+  name: system:prometheus-telemetry
 rules:
-- nonResourceURLs:
-  - /federate
-  verbs:
-  - get
 - apiGroups:
   - security.openshift.io
   resourceNames:
@@ -22,3 +17,9 @@ rules:
   - securitycontextconstraints
   verbs:
   - use
+- apiGroups:
+  - ""
+  nonResourceURLs:
+  - /federate
+  verbs:
+  - get

@@ -3,8 +3,8 @@ local prometheus = import 'github.com/prometheus-operator/kube-prometheus/jsonne
 local generateCertInjection = import '../utils/generate-certificate-injection.libsonnet';
 
 function(params) {
-  local cfg = params;
-  local prometheusTLSSecret = 'prometheus-telemetry-tls';
+  local cfg = params,
+  local prometheusTLSSecret = 'prometheus-telemetry-tls',
 
   telemetryScrapeSecret: {
     apiVersion: 'v1',
