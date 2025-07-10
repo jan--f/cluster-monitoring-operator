@@ -25,6 +25,7 @@ local thanosRuler = import './components/thanos-ruler.libsonnet';
 local thanosQuerier = import './components/thanos-querier.libsonnet';
 
 local openshiftStateMetrics = import './components/openshift-state-metrics.libsonnet';
+local prometheusTelemetry = import './components/prometheus-telemetry.libsonnet';
 local telemeterClient = import './components/telemeter-client.libsonnet';
 
 // Common configuration
@@ -355,6 +356,10 @@ local inCluster =
           capabilities: { drop: ['ALL'] },
         },
       },
+      prometheusTelemetry: {
+        namespace: $.values.common.namespace,
+        commonLabels+: $.values.common.commonLabels,
+      },
       telemeterClient: {
         namespace: $.values.common.namespace,
         kubeRbacProxyImage: $.values.common.images.kubeRbacProxy,
@@ -408,6 +413,7 @@ local inCluster =
                             inCluster.prometheus.roleSpecificNamespaces.items) +
                 inCluster.prometheus.roleConfig.rules +
                 inCluster.prometheusOperator.clusterRole.rules +
+                inCluster.prometheusTelemetry.clusterRole.rules +
                 inCluster.telemeterClient.clusterRole.rules +
                 inCluster.thanosQuerier.clusterRole.rules +
                 inCluster.thanosRuler.clusterRole.rules +
@@ -427,6 +433,7 @@ local inCluster =
     thanosRuler: thanosRuler($.values.thanosRuler),
     thanosQuerier: thanosQuerier($.values.thanosQuerier),
 
+    prometheusTelemetry: prometheusTelemetry($.values.prometheusTelemetry),
     telemeterClient: telemeterClient($.values.telemeterClient),
     monitoringPlugin: monitoringPlugin($.values.monitoringPlugin),
     openshiftStateMetrics: openshiftStateMetrics($.values.openshiftStateMetrics),
@@ -531,6 +538,7 @@ setTerminationMessagePolicy(
               { ['metrics-server/' + name]: inCluster.metricsServer[name] for name in std.objectFields(inCluster.metricsServer) } +
               // needs to be removed once remote-write is allowed for sending telemetry
               { ['telemeter-client/' + name]: inCluster.telemeterClient[name] for name in std.objectFields(inCluster.telemeterClient) } +
+              { ['prometheus-telemetry/' + name]: inCluster.prometheusTelemetry[name] for name in std.objectFields(inCluster.prometheusTelemetry) } +
               { ['monitoring-plugin/' + name]: inCluster.monitoringPlugin[name] for name in std.objectFields(inCluster.monitoringPlugin) } +
               { ['thanos-querier/' + name]: inCluster.thanosQuerier[name] for name in std.objectFields(inCluster.thanosQuerier) } +
               { ['thanos-ruler/' + name]: inCluster.thanosRuler[name] for name in std.objectFields(inCluster.thanosRuler) } +

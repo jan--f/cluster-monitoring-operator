@@ -112,8 +112,9 @@ func (t *PrometheusTelemetryTask) create(ctx context.Context) error {
 		return fmt.Errorf("waiting for Prometheus Telemetry Scrape secret failed: %w", err)
 	}
 
+	telemetrySecret, err := t.factory.PrometheusK8sTelemetrySecret()
 	klog.V(4).Info("initializing Prometheus object")
-	p, err := t.factory.PrometheusTelemetry()
+	p, err := t.factory.PrometheusTelemetry(telemetrySecret)
 	if err != nil {
 		return fmt.Errorf("initializing Prometheus object failed: %w", err)
 	}
