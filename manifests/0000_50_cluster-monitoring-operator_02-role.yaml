@@ -736,12 +736,18 @@ rules:
   - securitycontextconstraints
   verbs:
   - use
-- apiGroups:
-  - ""
-  nonResourceURLs:
+- nonResourceURLs:
   - /federate
   verbs:
   - get
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - nonroot
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
 - apiGroups:
   - authentication.k8s.io
   resources:

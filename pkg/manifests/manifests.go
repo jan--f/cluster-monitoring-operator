@@ -174,6 +174,7 @@ var (
 	PrometheusTelemetryServiceAccount       = "prometheus-telemetry/service-account.yaml"
 	PrometheusTelemetryServingCertsCABundle = "prometheus-telemetry/serving-certs-ca-bundle.yaml"
 	PrometheusTelemetryScrapeSecret         = "prometheus-telemetry/telemetry-scrape-secret.yaml"
+	PrometheusTelemetryTrustedCABundle      = "prometheus-telemetry/trusted-ca-bundle.yaml"
 
 	PrometheusUserWorkloadServingCertsCABundle                = "prometheus-user-workload/serving-certs-ca-bundle.yaml"
 	PrometheusUserWorkloadTrustedCABundle                     = "prometheus-user-workload/trusted-ca-bundle.yaml"
@@ -1301,6 +1302,10 @@ func (f *Factory) PrometheusK8sTrustedCABundle() (*v1.ConfigMap, error) {
 	return f.NewConfigMap(f.assets.MustNewAssetSlice(PrometheusK8sTrustedCABundle))
 }
 
+func (f *Factory) PrometheusTelemetryTrustedCABundle() (*v1.ConfigMap, error) {
+	return f.NewConfigMap(f.assets.MustNewAssetSlice(PrometheusTelemetryTrustedCABundle))
+}
+
 func (f *Factory) PrometheusUserWorkloadTrustedCABundle() (*v1.ConfigMap, error) {
 	return f.NewConfigMap(f.assets.MustNewAssetSlice(PrometheusUserWorkloadTrustedCABundle))
 }
@@ -1967,6 +1972,7 @@ func (f *Factory) PrometheusTelemetryScrapeSecret() (*v1.Secret, error) {
 	}
 
 	var scrapeConfig strings.Builder
+	// TODO: use proper secret mount paths below from the CR
 	scrapeConfig.WriteString(`- job_name: telemetry-scrape
   static_configs:
     - targets:
@@ -1975,9 +1981,9 @@ func (f *Factory) PrometheusTelemetryScrapeSecret() (*v1.Secret, error) {
   scrape_interval: 4m30s
   scheme: https
   tls_config:
-    ca_file: /etc/serving-certs-ca-bundle/service-ca.crt
-    key_file: /etc/tls/private/tls.key
-    cert_file: /etc/tls/private/tls.crt
+    ca_file: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+    key_file: /etc/prometheus/secrets/metrics-client-certs/tls.key
+    cert_file: /etc/prometheus/secrets/metrics-client-certs/tls.crt
   params:
     match[]:
 `)

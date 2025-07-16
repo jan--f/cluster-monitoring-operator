@@ -5,6 +5,7 @@ local generateCertInjection = import '../utils/generate-certificate-injection.li
 function(params) {
   local cfg = params,
   local prometheusTLSSecret = 'prometheus-telemetry-tls',
+  local saName = "prometheus-telemetry",
 
   telemetryScrapeSecret: {
     apiVersion: 'v1',
@@ -20,13 +21,13 @@ function(params) {
   serviceAccount: {
     apiVersion: 'v1',
     kind: 'ServiceAccount',
-    automountServiceAccountToken: 'false',
+    automountServiceAccountToken: false,
     metadata: {
       labels: {
         'app.kubernetes.io/name': 'prometheus-telemetry',
         'app.kubernetes.io/component': 'prometheus-telemetry',
       } + cfg.commonLabels,
-      name: 'prometheus-telemetry',
+      name: saName,
       namespace: cfg.namespace,
     },
   },
@@ -49,9 +50,18 @@ function(params) {
         verbs: ['use'],
       },
       {
-        apiGroups: [''],
         nonResourceURLs: ['/federate'],
         verbs: ['get'],
+      },
+      {
+        // By default authenticated service accounts are assigned to the `restricted` SCC which implies MustRunAsRange.
+        // This is problematic with statefulsets as UIDs (and file permissions) can change if SCCs are elevated.
+        // Instead, this sets the `nonroot` SCC in conjunction with a static fsGroup and runAsUser security context below
+        // to be immune against UID changes.
+        apiGroups: ['security.openshift.io'],
+        resources: ['securitycontextconstraints'],
+        resourceNames: ['nonroot'],
+        verbs: ['use'],
       },
     ],
   },
@@ -89,12 +99,13 @@ function(params) {
         'app.kubernetes.io/name': 'prometheus-telemetry',
         'app.kubernetes.io/component': 'prometheus-telemetry',
       } + cfg.commonLabels,
-      instance: {
+      annotations: {
         'operator.prometheus.io/controller-id': 'openshift-monitoring/prometheus-operator',
       },
     },
     spec: {
-    replicas: 1,
+      replicas: 1,
+      serviceAccountName: saName,
       // Enable experimental delayed compaction feature.
       enableFeatures: ['delayed-compaction'],
       resources: {
@@ -132,22 +143,23 @@ function(params) {
       scrapeConfigNamespaceSelector: null,
       listenLocal: true,
       priorityClassName: 'system-cluster-critical',
-      // -  affinity:
-      podAntiAffinity: {
-        requiredDuringSchedulingIgnoredDuringExecution: [
-          {
-            labelSelector: {
-              matchLabels: {
-                'app.kubernetes.io/component': 'prometheus',
-                'app.kubernetes.io/instance': 'telemetry',
-                'app.kubernetes.io/name': 'prometheus',
-                'app.kubernetes.io/part-of': 'openshift-monitoring',
+      affinity: {
+        podAntiAffinity: {
+          requiredDuringSchedulingIgnoredDuringExecution: [
+            {
+              labelSelector: {
+                matchLabels: {
+                  'app.kubernetes.io/component': 'prometheus',
+                  'app.kubernetes.io/instance': 'telemetry',
+                  'app.kubernetes.io/name': 'prometheus',
+                  'app.kubernetes.io/part-of': 'openshift-monitoring',
+                },
               },
+              namespaces: ['openshift-monitoring'],
+              topologyKey: 'kubernetes.io/hostname',
             },
-            namespaces: ['openshift-monitoring'],
-            topologyKey: 'kubernetes.io/hostname',
-          },
-        ],
+          ],
+        },
       },
       additionalArgs: [
         // This aligns any scrape timestamps <= 15ms to the a multiple of
@@ -183,13 +195,13 @@ function(params) {
               name: $.trustedCaBundle.metadata.name,
               mountPath: '/etc/pki/ca-trust/extracted/pem/',
             },
-            {
-              mountPath: '/etc/tls/private',
-              name: 'secret-' + prometheusTLSSecret,
-            },
+            // {
+            //   mountPath: '/etc/tls/private',
+            //   name: 'secret-' + prometheusTLSSecret,
+            // },
             {
               mountPath: '/etc/tls/client',
-              name: 'metrics-client-ca',
+              name: 'configmap-metrics-client-ca',
               readOnly: true,
             },
           ],

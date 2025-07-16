@@ -353,9 +353,9 @@ func (t *PrometheusTask) create(ctx context.Context) error {
 		}
 	} else {
 		klog.V(4).Info("deleting Prometheus telemetry secret")
-		if err = t.client.DeleteSecret(ctx, telemetrySecret); err != nil {
-			return fmt.Errorf("deleting Prometheus telemetry secret failed: %w", err)
-		}
+		// if err = t.client.DeleteSecret(ctx, telemetrySecret); err != nil {
+		// 	return fmt.Errorf("deleting Prometheus telemetry secret failed: %w", err)
+		// }
 	}
 
 	{

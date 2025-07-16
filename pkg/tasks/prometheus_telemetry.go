@@ -44,7 +44,7 @@ func (t *PrometheusTelemetryTask) Run(ctx context.Context) error {
 
 	err := t.create(ctx)
 	if err != nil {
-		klog.V(4).ErrorS(err, "updation of prometheus failed")
+		klog.V(4).ErrorS(err, "update of prometheus failed")
 		errs = append(errs, err)
 	}
 
@@ -65,6 +65,16 @@ func (t *PrometheusTelemetryTask) create(ctx context.Context) error {
 	_, err = t.client.CreateIfNotExistConfigMap(ctx, cacm)
 	if err != nil {
 		return fmt.Errorf("creating serving certs CA Bundle ConfigMap failed: %w", err)
+	}
+	// Create trusted CA bundle ConfigMap.
+	trustedCA, err := t.factory.PrometheusTelemetryTrustedCABundle()
+	if err != nil {
+		return fmt.Errorf("initializing Prometheus CA bundle ConfigMap failed: %w", err)
+	}
+
+	err = t.client.CreateOrUpdateConfigMap(ctx, trustedCA)
+	if err != nil {
+		return fmt.Errorf("reconciling Prometheus trusted CA bundle ConfigMap failed: %w", err)
 	}
 
 	sa, err := t.factory.PrometheusTelemetryServiceAccount()
@@ -113,6 +123,13 @@ func (t *PrometheusTelemetryTask) create(ctx context.Context) error {
 	}
 
 	telemetrySecret, err := t.factory.PrometheusK8sTelemetrySecret()
+	if err != nil {
+		return fmt.Errorf("initializing Prometheus telemetry secret failed: %w", err)
+	}
+	err = t.client.CreateOrUpdateSecret(ctx, telemetrySecret)
+	if err != nil {
+		return fmt.Errorf("reconciling Prometheus telemetry secret failed: %w", err)
+	}
 	klog.V(4).Info("initializing Prometheus object")
 	p, err := t.factory.PrometheusTelemetry(telemetrySecret)
 	if err != nil {
