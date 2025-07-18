@@ -440,7 +440,7 @@ func (c *Config) applyDefaults() {
 	}
 	if c.ClusterMonitoringConfiguration.TelemeterClientConfig == nil {
 		c.ClusterMonitoringConfiguration.TelemeterClientConfig = &TelemeterClientConfig{
-			TelemeterServerURL: "https://infogw.api.openshift.com/",
+			TelemeterServerURL: "https://infogw.api.openshift.com/metrics/v1/receive",
 		}
 	}
 
